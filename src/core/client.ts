@@ -71,6 +71,15 @@ export class BaseClient {
         headers['X-Correlation-ID'] = options.correlationId;
       }
 
+      // Multipart bodies: let fetch set the Content-Type (with boundary) itself,
+      // and send the FormData as-is rather than JSON-encoding it.
+      const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+      if (isFormData) {
+        delete headers['Content-Type'];
+      }
+
+      const requestBody = body ? (isFormData ? (body as FormData) : JSON.stringify(body)) : undefined;
+
       const controller = new AbortController();
       const timeoutMs = options.timeout ?? this.config.timeout ?? 30000;
       const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
@@ -79,7 +88,7 @@ export class BaseClient {
         const response = await fetch(url, {
           method,
           headers,
-          body: body ? JSON.stringify(body) : undefined,
+          body: requestBody,
           signal: controller.signal,
         });
 

@@ -1,5 +1,11 @@
 import type { BaseClient } from '../core/client.js';
-import type { BankListResponse, RequestOptions, WalletListResponse } from '../types/index.js';
+import type {
+  BankListResponse,
+  FileUploadParams,
+  FileUploadResponse,
+  RequestOptions,
+  WalletListResponse,
+} from '../types/index.js';
 
 /**
  * Provides access to ancillary data such as lists of supported banks and wallets.
@@ -29,5 +35,31 @@ export class Ancillary {
   async getWallets(countryCode: string, options?: RequestOptions): Promise<WalletListResponse> {
     const path = `/getwalletlist/${encodeURIComponent(countryCode)}`;
     return this.client.request<WalletListResponse>('GET', path, undefined, options);
+  }
+
+  /**
+   * Uploads a supporting document (e.g. KYC/compliance) for a transaction.
+   * The file is sent as multipart/form-data.
+   *
+   * @param file - The file to upload (Blob or File)
+   * @param params - customerType, docType and transactionId query parameters
+   * @param options - Optional request configuration (timeout, correlationId)
+   */
+  async uploadFile(
+    file: Blob,
+    params: FileUploadParams,
+    options?: RequestOptions,
+  ): Promise<FileUploadResponse> {
+    const form = new FormData();
+    form.append('file', file);
+
+    const query = new URLSearchParams({
+      customerType: params.customerType,
+      docType: params.docType,
+      transactionId: params.transactionId,
+    }).toString();
+
+    const path = `/fileUpload?${query}`;
+    return this.client.request<FileUploadResponse>('POST', path, form, options);
   }
 }

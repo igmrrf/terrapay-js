@@ -1,4 +1,5 @@
 import type { BaseClient } from '../core/client.js';
+import { encryptPAN } from '../core/encryption.js';
 import type {
   AccountStatusResponse,
   IdentifierType,
@@ -32,6 +33,37 @@ export class Accounts {
     const finalPath = bnv ? `${path}?bnv=${encodeURIComponent(bnv)}` : path;
 
     return this.client.request<AccountStatusResponse>('GET', finalPath, undefined, options);
+  }
+
+  /**
+   * Checks the status of a card (PAN) beneficiary and matches the name.
+   * The PAN is RSA-encrypted client-side and sent in the `X-PAN` header.
+   *
+   * @param pan - The plaintext card number (PAN)
+   * @param bnv - Beneficiary name for fuzzy matching
+   * @param country - ISO Alpha-2 country code of the beneficiary
+   * @param options - Optional request configuration (timeout, correlationId)
+   */
+  async getPanStatus(
+    pan: string,
+    bnv: string,
+    country: string,
+    options?: RequestOptions,
+  ): Promise<AccountStatusResponse> {
+    if (!this.client.config.publicKey) {
+      throw new Error('`publicKey` is required in the SDK config to encrypt PAN details.');
+    }
+
+    const encryptedPan = await encryptPAN(pan, this.client.config.publicKey);
+    const path = `/gsma/pan/status?bnv=${encodeURIComponent(bnv)}&country=${encodeURIComponent(country)}`;
+
+    return this.client.request<AccountStatusResponse>('GET', path, undefined, {
+      ...options,
+      headers: {
+        ...options?.headers,
+        'X-PAN': encryptedPan,
+      },
+    });
   }
 
   /**

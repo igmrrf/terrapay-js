@@ -47,4 +47,22 @@ export class Quotations {
     const path = `/gsmaV2/quotations/${encodeURIComponent(prefundingCurrency)}?instrumentType=${encodeURIComponent(instrumentType)}&transactionType=${encodeURIComponent(transactionType)}`;
     return this.client.request<QuotationResponse[]>('GET', path, undefined, options);
   }
+
+  /**
+   * Retrieves corridor quotations (bulk rates) using the V3 API for a specific
+   * prefunding currency.
+   *
+   * @param prefundingCurrency - The currency to prefund (e.g., 'USD')
+   * @param instrumentType - The sink type ('WALLET', 'BANK_AC', 'CARD')
+   * @param transactionType - The transaction type ('p2p', 'b2b', etc.)
+   */
+  async getCorridorRatesV3(
+    prefundingCurrency: string,
+    instrumentType: string,
+    transactionType = 'p2p',
+    options?: RequestOptions,
+  ): Promise<QuotationResponse[]> {
+    const path = `/gsmaV3/quotations/${encodeURIComponent(prefundingCurrency)}?instrumentType=${encodeURIComponent(instrumentType)}&transactionType=${encodeURIComponent(transactionType)}`;
+    return this.client.request<QuotationResponse[]>('GET', path, undefined, options);
+  }
 }

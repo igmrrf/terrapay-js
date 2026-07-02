@@ -23,7 +23,6 @@ export interface PostalAddress {
   stateProvince?: string;
   postalCode?: string;
   country: string;
-  cityOfBirth?: string;
 }
 
 export interface SubjectName {
@@ -39,6 +38,7 @@ export interface KycDetails {
   nationality?: string;
   dateOfBirth?: string;
   countryOfBirth?: string;
+  cityOfBirth?: string;
   gender?: 'M' | 'F' | 'U';
   primaryContactCountryCode?: string;
   primaryContactNo?: string;
@@ -126,7 +126,7 @@ export interface QuotationRequest {
   requestDate: string;
   type?: TransactionType;
   scheme?: string;
-  debitParty: Party[];
+  debitParty?: Party[];
   creditParty: Party[];
   requestAmount: string;
   requestCurrency: string;
@@ -162,6 +162,7 @@ export interface TransactionRequest {
   amount: string;
   currency: string;
   type: TransactionType;
+  scheme?: string;
   descriptionText?: string | null;
   requestDate: string;
   requestingOrganisationTransactionReference: string;
@@ -243,6 +244,21 @@ export interface Wallet {
 export interface WalletListResponse {
   countryCode: string;
   wallets: Wallet[];
+}
+
+export interface FileUploadParams {
+  /** Whose document this is, e.g. 'sender' or 'recipient' */
+  customerType: string;
+  /** Document type, e.g. 'Invoice' */
+  docType: string;
+  /** The transaction the document is attached to */
+  transactionId: string;
+}
+
+export interface FileUploadResponse {
+  statusCode?: string;
+  responseMessage?: string;
+  documentId?: string;
 }
 
 // --- Reports Types ---
