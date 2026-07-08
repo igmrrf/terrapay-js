@@ -1,7 +1,8 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { generateKeyPairSync } from 'node:crypto';
 import { TerraPay } from '../terrapay.js';
-import type { TransactionRequest } from '../types/index.js';
+import { NAME_MATCH_STATUSES, SCHEMES } from '../types/index.js';
+import type { NameMatchStatus, TransactionRequest } from '../types/index.js';
 
 describe('Domain Resources API Methods', () => {
   const sdk = new TerraPay({
@@ -26,16 +27,68 @@ describe('Domain Resources API Methods', () => {
     await sdk.accounts.verify({} as any);
     expect(global.fetch).toHaveBeenCalled();
     const [url, init] = (global.fetch as any).mock.calls[0];
-    expect(url).toContain('/tpverify/api/v1/verify');
+    // TPV lives on a different host/port than the core API, and has no /eig prefix.
+    expect(url).toBe('https://uat-tpverify.terrapay.com:20201/tpverify/api/v1/verify');
     expect(init.method).toBe('POST');
+  });
+
+  it('Accounts: verify honors a custom tpVerifyBaseUrl', async () => {
+    const tpvSdk = new TerraPay({
+      username: 'test',
+      password: 'password',
+      originCountry: 'US',
+      environment: 'uat',
+      tpVerifyBaseUrl: 'https://custom-tpv.example.com',
+    });
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    await tpvSdk.accounts.verify({} as any);
+    const [url] = (global.fetch as any).mock.calls[0];
+    expect(url).toBe('https://custom-tpv.example.com/tpverify/api/v1/verify');
   });
 
   it('should URL encode path parameters correctly', async () => {
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
-    await sdk.accounts.getStatus('msisdn', '+12 34', 'A & B');
+    await sdk.accounts.getStatus('msisdn', '+12 34', { bnv: 'A & B' });
     const [url] = (global.fetch as any).mock.calls[0];
     expect(url).toContain('/gsma/accounts/msisdn/%2B12%2034/status?bnv=A%20%26%20B');
+  });
+
+  it('getStatus: builds wallet query params (bnv, snv, provider)', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    await sdk.accounts.getStatus('msisdn', '+123', {
+      bnv: 'John Smith',
+      snv: 'David Robinson',
+      provider: 'CO_BREB_PAY',
+    });
+    const [url] = (global.fetch as any).mock.calls[0];
+    // Order follows the documented parameter order (bnv, ..., provider, snv, ...).
+    expect(url).toContain(
+      '/gsma/accounts/msisdn/%2B123/status?bnv=John%20Smith&provider=CO_BREB_PAY&snv=David%20Robinson',
+    );
+  });
+
+  it('getStatus: builds bank-account query params', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    await sdk.accounts.getStatus('accountNumber', '232201001617', {
+      bnv: 'Devki Luggage Centre',
+      bankname: 'Canara Bank',
+      country: 'IN',
+      bankcode: 'CNRB0000232',
+      banksubcode: 'BR001',
+      accounttype: 'Savings',
+    });
+    const [url] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain('/gsma/accounts/accountNumber/232201001617/status?');
+    expect(url).toContain('bnv=Devki%20Luggage%20Centre');
+    expect(url).toContain('bankcode=CNRB0000232');
+    expect(url).toContain('bankname=Canara%20Bank');
+    expect(url).toContain('country=IN');
+    expect(url).toContain('banksubcode=BR001');
+    expect(url).toContain('accounttype=Savings');
   });
 
   it('Ancillary: getBanks', async () => {
@@ -100,6 +153,32 @@ describe('Domain Resources API Methods', () => {
     expect(url).toContain('/gsmaV3/quotations/USD?instrumentType=CARD&transactionType=p2p');
   });
 
+  it('Quotations: getCorridorRates parses the corridor rate shape', async () => {
+    const body = [
+      {
+        requestDate: '2020-01-02 10:51:16',
+        requestCurrency: 'USD',
+        quotes: [
+          {
+            receivingCurrency: 'ILS',
+            fxRate: '3.590000',
+            transactionType: 'p2p',
+            instrumentType: 'BANK_AC',
+            scheme: '*',
+          },
+        ],
+        quotationStatus: '9000:Success',
+      },
+    ];
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(body), { status: 200 })));
+    const res = await sdk.quotations.getCorridorRates('USD', 'BANK_AC');
+    expect(res[0].requestCurrency).toBe('USD');
+    expect(res[0].quotes[0].receivingCurrency).toBe('ILS');
+    expect(res[0].quotes[0].fxRate).toBe('3.590000');
+    expect(res[0].quotationStatus).toBe('9000:Success');
+  });
+
   it('Reports: getLedgerBalance', async () => {
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
@@ -151,7 +230,14 @@ describe('Domain Resources API Methods', () => {
       requestingOrganisationTransactionReference: 'SrcTxnId001',
       debitParty: [{ key: 'msisdn', value: '+971810456234' }],
       creditParty: [{ key: 'msisdn', value: '+9779840002320' }],
-      senderKyc: { cityOfBirth: 'Paris' },
+      senderKyc: {
+        nationality: 'FR',
+        dateOfBirth: '1986-06-28',
+        cityOfBirth: 'Paris',
+        subjectName: { firstName: 'Einstein', lastName: 'Bela', fullName: 'Einstein James Bela' },
+        postalAddress: { addressLine1: '49', city: 'Lyon', country: 'FR' },
+        idDocument: [{ idType: 'passport', idNumber: '123456789', expiryDate: '2033-09-26' }],
+      },
     };
     await sdk.transactions.create(body);
     const [, init] = (global.fetch as any).mock.calls[0];
@@ -187,6 +273,28 @@ describe('Domain Resources API Methods', () => {
     expect(init.method).toBe('POST');
   });
 
+  it('SCHEMES: exports the full country-specific scheme table', () => {
+    expect(SCHEMES).toHaveLength(14);
+    const codes = SCHEMES.map((s) => s.scheme);
+    expect(codes).toContain('MC');
+    expect(codes).toContain('INSTANT');
+    // Every entry has a valid instrument type
+    for (const s of SCHEMES) {
+      expect(['WALLET', 'BANK_AC', 'CARD']).toContain(s.instrumentType);
+    }
+    expect(SCHEMES.find((s) => s.scheme === 'NEQUI')?.instrumentType).toBe('WALLET');
+  });
+
+  it('NAME_MATCH_STATUSES: exposes all four match codes with categories', () => {
+    const codes: NameMatchStatus[] = ['MTCH', 'CMTC', 'NMTC', 'NOAP'];
+    expect(Object.keys(NAME_MATCH_STATUSES)).toEqual(codes);
+    expect(NAME_MATCH_STATUSES.MTCH.category).toBe('Success');
+    expect(NAME_MATCH_STATUSES.CMTC.category).toBe('Success');
+    expect(NAME_MATCH_STATUSES.NOAP.category).toBe('Success');
+    expect(NAME_MATCH_STATUSES.NMTC.category).toBe('Verification Failed');
+    expect(NAME_MATCH_STATUSES.MTCH.definition).toContain('exact match');
+  });
+
   it('Accounts: getPanStatus encrypts the PAN into the X-PAN header', async () => {
     const panSdk = new TerraPay({
       username: 'test',
@@ -197,9 +305,12 @@ describe('Domain Resources API Methods', () => {
     });
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
-    await panSdk.accounts.getPanStatus('4111222233334444', 'MAGALI DOLORES ORTIZ', 'PH');
+    await panSdk.accounts.getPanStatus('4111222233334444', {
+      bnv: 'MAGALI DOLORES ORTIZ',
+      country: 'PH',
+    });
     const [url, init] = (global.fetch as any).mock.calls[0];
-    expect(url).toContain('/gsma/pan/status?bnv=MAGALI%20DOLORES%20ORTIZ&country=PH');
+    expect(url).toContain('/gsma/accounts/pan/status?bnv=MAGALI%20DOLORES%20ORTIZ&country=PH');
     expect(init.method).toBe('GET');
     expect(typeof init.headers['X-PAN']).toBe('string');
     expect(init.headers['X-PAN'].length).toBeGreaterThan(0);
@@ -208,7 +319,7 @@ describe('Domain Resources API Methods', () => {
   it('Accounts: getPanStatus throws when publicKey is not configured', async () => {
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
-    await expect(sdk.accounts.getPanStatus('4111', 'Name', 'PH')).rejects.toThrow(
+    await expect(sdk.accounts.getPanStatus('4111', { bnv: 'Name', country: 'PH' })).rejects.toThrow(
       '`publicKey` is required',
     );
     expect(global.fetch).not.toHaveBeenCalled();

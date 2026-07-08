@@ -18,7 +18,7 @@ describe('Auth Utilities', () => {
   });
 
   it('should generate authentication headers', async () => {
-    const headersPromise = getAuthHeaders(config);
+    const headersPromise = getAuthHeaders(config, false);
     expect(headersPromise).toBeInstanceOf(Promise);
     const headers = await headersPromise;
     expect(headers['X-USERNAME']).toBe('testuser');
@@ -32,7 +32,7 @@ describe('Auth Utilities', () => {
 
   it('should use pre-hashed password if isPasswordHashed is true', async () => {
     const preHashedConfig = { ...config, isPasswordHashed: true, password: 'ALREADY_HASHED' };
-    const headers = await getAuthHeaders(preHashedConfig);
+    const headers = await getAuthHeaders(preHashedConfig, false);
     expect(headers['X-PASSWORD']).toBe('ALREADY_HASHED');
   });
 });

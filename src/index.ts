@@ -15,5 +15,6 @@ export {
   TerraPayError,
   ValidationError,
 } from './core/errors.js';
+export { getResponseMessage, RESPONSE_CODES, type ResponseCode } from './core/response-codes.js';
 // Export Types
 export * from './types/index.js';

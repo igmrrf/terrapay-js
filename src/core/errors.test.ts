@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { AuthenticationError, RateLimitError, TerraPayError, ValidationError } from './errors.js';
+import { RESPONSE_CODES, getResponseMessage } from './response-codes.js';
 
 describe('Error Handling', () => {
   it('should normalize API error response', () => {
@@ -33,6 +34,31 @@ describe('Error Handling', () => {
     expect(validationError.name).toBe('ValidationError');
   });
 
+  it('should fall back to the known RC message when no description is provided', () => {
+    const rawError = {
+      error: {
+        errorCategory: 'validation',
+        errorCode: 'RC117',
+        errorDateTime: '2023-10-27 11:00:00',
+      },
+    };
+    const error = new TerraPayError('Original Message', 400, rawError);
+    expect(error.errorCode).toBe('RC117');
+    expect(error.message).toBe("The beneficiary's name does not match the records.");
+  });
+
+  it('should keep original message for an unknown error code', () => {
+    const rawError = { error: { errorCode: 'RC999' } };
+    const error = new TerraPayError('Original Message', 400, rawError);
+    expect(error.message).toBe('Original Message');
+  });
+
+  it('should prefer errorDescription over the RC lookup', () => {
+    const rawError = { error: { errorCode: 'RC117', errorDescription: 'Custom API text' } };
+    const error = new TerraPayError('Original Message', 400, rawError);
+    expect(error.message).toBe('Custom API text');
+  });
+
   it('should handle malformed error payloads gracefully', () => {
     const err1 = new TerraPayError('Base msg', 400, 'Just a string');
     expect(err1.message).toBe('Base msg');
@@ -45,5 +71,13 @@ describe('Error Handling', () => {
     const err3 = new TerraPayError('Base msg', 400, { some: 'other field' });
     expect(err3.message).toBe('Base msg');
     expect(err3.errorCode).toBeUndefined();
+  });
+
+  it('RESPONSE_CODES: exposes the full RC100–RC161 table', () => {
+    expect(Object.keys(RESPONSE_CODES)).toHaveLength(62);
+    expect(RESPONSE_CODES.RC100).toContain('mandatory parameter is missing');
+    expect(RESPONSE_CODES.RC161).toBe('Network read timed out. Please retry the request.');
+    expect(getResponseMessage('RC109')).toContain('Authentication failed');
+    expect(getResponseMessage('RC999')).toBeUndefined();
   });
 });

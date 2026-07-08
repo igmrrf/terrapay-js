@@ -49,13 +49,17 @@ export class Reports {
   async getStatements(
     start: string,
     end: string,
-    ledgerBookName: string,
+    ledgerBookName?: string,
     options?: RequestOptions,
   ): Promise<StatementsResponse> {
-    // Note: The Statements API is typically hosted on engage.terrapay.com.
-    // The BaseClient would route this correctly if using a full reverse proxy
-    // or if the base URL is provided explicitly.
-    const path = `/PartnerPortalReports/partnerstatements_v1?start=${encodeURIComponent(start)}&end=${encodeURIComponent(end)}&ledgerBookName=${encodeURIComponent(ledgerBookName)}`;
-    return this.client.request<StatementsResponse>('GET', path, undefined, options);
+    // The Statements API is hosted on the partner-portal (engage) host, NOT the
+    // core `/eig` API host, and has no `/eig` prefix. `client.statementsBaseUrl`
+    // resolves to the correct per-environment host (or a config override).
+    const params = [`start=${encodeURIComponent(start)}`, `end=${encodeURIComponent(end)}`];
+    if (ledgerBookName) params.push(`ledgerBookName=${encodeURIComponent(ledgerBookName)}`);
+    const base = this.client.statementsBaseUrl.replace(/\/$/, '');
+    // BaseClient.request treats a path starting with `http` as an absolute URL.
+    const url = `${base}/PartnerPortalReports/partnerstatements_v1?${params.join('&')}`;
+    return this.client.request<StatementsResponse>('GET', url, undefined, options);
   }
 }

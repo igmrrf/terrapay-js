@@ -1,3 +1,5 @@
+import { getResponseMessage } from './response-codes.js';
+
 export class TerraPayError extends Error {
   public readonly status?: number;
   public readonly errorCategory?: string;
@@ -16,9 +18,15 @@ export class TerraPayError extends Error {
       this.errorCategory = errObj.errorCategory;
       this.errorCode = errObj.errorCode;
       this.errorDateTime = errObj.errorDateTime;
-      // Overwrite message if API provided a specific description
+      // Overwrite message if API provided a specific description, otherwise
+      // fall back to the known message for the response code (RC100–RC161).
       if (errObj.errorDescription) {
         this.message = errObj.errorDescription;
+      } else if (this.errorCode) {
+        const known = getResponseMessage(this.errorCode);
+        if (known) {
+          this.message = known;
+        }
       }
     }
   }

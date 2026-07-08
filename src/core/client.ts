@@ -8,6 +8,10 @@ import { AuthenticationError, RateLimitError, TerraPayError, ValidationError } f
  */
 export class BaseClient {
   private readonly baseUrl: string;
+  /** Base URL for the TerraPay Verify (TPV) API (different host/port). */
+  public readonly tpVerifyBaseUrl: string;
+  /** Base URL for the Partner Portal Reports (statements) API (different host/port). */
+  public readonly statementsBaseUrl: string;
   private failures = 0;
   private lastFailureTime = 0;
   private readonly failureThreshold: number;
@@ -28,6 +32,25 @@ export class BaseClient {
           : 'https://uat-connect.terrapay.com:21211/eig';
     }
 
+    if (config.tpVerifyBaseUrl) {
+      this.tpVerifyBaseUrl = config.tpVerifyBaseUrl;
+    } else {
+      this.tpVerifyBaseUrl =
+        config.environment === 'production'
+          ? 'https://tpverify.terrapay.com'
+          : 'https://uat-tpverify.terrapay.com:20201';
+    }
+
+    // Statements live on the partner-portal (engage) host, not the core API host.
+    if (config.statementsBaseUrl) {
+      this.statementsBaseUrl = config.statementsBaseUrl;
+    } else {
+      this.statementsBaseUrl =
+        config.environment === 'production'
+          ? 'https://engage.terrapay.com'
+          : 'https://uat-engage.terrapay.com:21228';
+    }
+
     this.failureThreshold = config.circuitBreaker?.failureThreshold ?? 3;
     this.resetTimeout = config.circuitBreaker?.resetTimeout ?? 30000;
   }
@@ -37,7 +60,8 @@ export class BaseClient {
    *
    * @template T - The expected response type.
    * @param method - HTTP method (GET, POST, etc.).
-   * @param path - API endpoint path (relative to baseUrl).
+   * @param path - API endpoint path (relative to baseUrl), or an absolute URL
+   *   (starting with `http`) to target a different host such as the TPV API.
    * @param body - Optional request payload.
    * @param options - Per-request options like headers or correlation IDs.
    * @returns A promise resolving to the API response.
@@ -56,12 +80,16 @@ export class BaseClient {
       // Half-open state: allow this request to proceed, but if it fails, it will immediately trip again.
     }
 
-    const url = `${this.baseUrl}${path}`;
+    const url = path.startsWith('http') ? path : `${this.baseUrl}${path}`;
     const maxRetries = this.config.maxRetries ?? 2;
     let attempt = 0;
 
+    // Multipart bodies: let fetch set the Content-Type (with boundary) itself,
+    // and send the FormData as-is rather than JSON-encoding it.
+    const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
     while (attempt <= maxRetries) {
-      const authHeaders = await getAuthHeaders(this.config);
+      const authHeaders = await getAuthHeaders(this.config, isFormData);
+
       const headers = {
         ...authHeaders,
         ...options.headers,
@@ -71,14 +99,11 @@ export class BaseClient {
         headers['X-Correlation-ID'] = options.correlationId;
       }
 
-      // Multipart bodies: let fetch set the Content-Type (with boundary) itself,
-      // and send the FormData as-is rather than JSON-encoding it.
-      const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
-      if (isFormData) {
-        delete headers['Content-Type'];
-      }
-
-      const requestBody = body ? (isFormData ? (body as FormData) : JSON.stringify(body)) : undefined;
+      const requestBody = body
+        ? isFormData
+          ? (body as FormData)
+          : JSON.stringify(body)
+        : undefined;
 
       const controller = new AbortController();
       const timeoutMs = options.timeout ?? this.config.timeout ?? 30000;
@@ -105,7 +130,12 @@ export class BaseClient {
         }
 
         this.onSuccess();
-        return (await response.json()) as T;
+        const data = (await response.json()) as T;
+        // TerraPay frequently returns business/auth/validation failures as an
+        // `{ error: { errorCode, ... } }` envelope with a 2xx HTTP status. Surface
+        // those as typed errors instead of leaking the envelope to the caller.
+        this.throwIfApiErrorEnvelope(data, response.status);
+        return data;
       } catch (error: unknown) {
         clearTimeout(timeoutId);
 
@@ -135,6 +165,32 @@ export class BaseClient {
 
   private onSuccess() {
     this.failures = 0;
+  }
+
+  /**
+   * TerraPay returns some failures as an `{ error: { errorCode, ... } }` body
+   * with a 2xx status. Detect that envelope on an otherwise-successful response
+   * and throw the matching typed error, keeping the "success = data, failure =
+   * throw" contract consistent across HTTP-level and body-level errors.
+   */
+  private throwIfApiErrorEnvelope(data: unknown, status: number): void {
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+    const err = (data as Record<string, unknown>).error;
+    if (!err || typeof err !== 'object') return;
+    const e = err as Record<string, unknown>;
+    const code = typeof e.errorCode === 'string' ? e.errorCode : undefined;
+    if (!code) return;
+
+    const category = typeof e.errorCategory === 'string' ? e.errorCategory : '';
+    const message = typeof e.errorDescription === 'string' ? e.errorDescription : 'API error';
+
+    if (category === 'authorisation' || code === '1003') {
+      throw new AuthenticationError(message, status, data);
+    }
+    if (category === 'validation') {
+      throw new ValidationError(message, status, data);
+    }
+    throw new TerraPayError(message, status, data);
   }
 
   private onFailure() {

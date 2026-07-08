@@ -1,5 +1,10 @@
 import type { BaseClient } from '../core/client.js';
-import type { QuotationRequest, QuotationResponse, RequestOptions } from '../types/index.js';
+import type {
+  CorridorQuotationResponse,
+  QuotationRequest,
+  QuotationResponse,
+  RequestOptions,
+} from '../types/index.js';
 
 /**
  * Handles price discovery and foreign exchange rate quotations.
@@ -40,12 +45,12 @@ export class Quotations {
    */
   async getCorridorRates(
     prefundingCurrency: string,
-    instrumentType: string,
+    instrumentType?: string,
     transactionType = 'p2p',
     options?: RequestOptions,
-  ): Promise<QuotationResponse[]> {
-    const path = `/gsmaV2/quotations/${encodeURIComponent(prefundingCurrency)}?instrumentType=${encodeURIComponent(instrumentType)}&transactionType=${encodeURIComponent(transactionType)}`;
-    return this.client.request<QuotationResponse[]>('GET', path, undefined, options);
+  ): Promise<CorridorQuotationResponse[]> {
+    const path = `/gsmaV2/quotations/${encodeURIComponent(prefundingCurrency)}${corridorQuery(instrumentType, transactionType)}`;
+    return this.client.request<CorridorQuotationResponse[]>('GET', path, undefined, options);
   }
 
   /**
@@ -58,11 +63,22 @@ export class Quotations {
    */
   async getCorridorRatesV3(
     prefundingCurrency: string,
-    instrumentType: string,
+    instrumentType?: string,
     transactionType = 'p2p',
     options?: RequestOptions,
-  ): Promise<QuotationResponse[]> {
-    const path = `/gsmaV3/quotations/${encodeURIComponent(prefundingCurrency)}?instrumentType=${encodeURIComponent(instrumentType)}&transactionType=${encodeURIComponent(transactionType)}`;
-    return this.client.request<QuotationResponse[]>('GET', path, undefined, options);
+  ): Promise<CorridorQuotationResponse[]> {
+    const path = `/gsmaV3/quotations/${encodeURIComponent(prefundingCurrency)}${corridorQuery(instrumentType, transactionType)}`;
+    return this.client.request<CorridorQuotationResponse[]>('GET', path, undefined, options);
   }
+}
+
+/**
+ * Builds the corridor query string. `instrumentType` is optional (omitting it
+ * returns rates for all instruments); `transactionType` is always sent.
+ */
+function corridorQuery(instrumentType: string | undefined, transactionType: string): string {
+  const parts: string[] = [];
+  if (instrumentType) parts.push(`instrumentType=${encodeURIComponent(instrumentType)}`);
+  parts.push(`transactionType=${encodeURIComponent(transactionType)}`);
+  return `?${parts.join('&')}`;
 }

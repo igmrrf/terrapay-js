@@ -33,7 +33,7 @@ const sdk = new TerraPay({
   username: 'your_username',
   password: 'your_password', // Plaintext; SDK will automatically SHA-256 hash it
   isPasswordHashed: false,
-  originCountry: 'US',
+  originCountry: 'CA',
   environment: 'uat', // or 'production'
   maxRetries: 3,
 });
@@ -42,7 +42,7 @@ const sdk = new TerraPay({
 ### 1. Remit to Mobile (Wallet)
 
 ```typescript
-const status = await sdk.accounts.getStatus('msisdn', '+1234567890');
+const status = await sdk.accounts.getStatus('msisdn', '+1234567890', { bnv: 'John Doe' });
 
 const quote = await sdk.quotations.createV2({
   requestDate: new Date().toISOString().replace(/T/, ' ').replace(/\..+/, ''),
@@ -122,7 +122,7 @@ const mockData = MockTerraPay.createDefaultResponses().accountStatus;
 
 // Use it in your tests (e.g., bun test)
 test('my service handles available accounts', async () => {
-  const status = await mockSdk.accounts.getStatus('msisdn', '+123');
+  const status = await mockSdk.accounts.getStatus('msisdn', '+123', { bnv: 'John Doe' });
   expect(status.status).toBe('available');
 });
 ```

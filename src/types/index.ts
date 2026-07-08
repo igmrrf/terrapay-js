@@ -29,6 +29,23 @@ export interface TerraPayConfig {
   baseUrl?: string;
 
   /**
+   * Base URL for the TerraPay Verify (TPV) API, which lives on a different
+   * host/port than the core API. If not provided, defaults to the standard
+   * TPV URLs for the selected environment.
+   */
+  tpVerifyBaseUrl?: string;
+
+  /**
+   * Base URL for the Partner Portal Reports API used by `reports.getStatements`.
+   * Statements are served from the partner portal host (e.g.
+   * `https://engage.terrapay.com`), NOT the core `/eig` API host. When set, the
+   * statements request is issued against this absolute base; the partner-portal
+   * host is provided by TerraPay during onboarding. If omitted, the request
+   * falls back to the core base URL (which only returns a stub on the sandbox).
+   */
+  statementsBaseUrl?: string;
+
+  /**
    * Public RSA key provided by TerraPay for encrypting PAN details.
    * Required if using Card payouts.
    */

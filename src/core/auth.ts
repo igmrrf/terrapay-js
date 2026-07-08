@@ -18,7 +18,10 @@ async function sha256(message: string): Promise<string> {
 /**
  * Generates the required authentication headers for the TerraPay API.
  */
-export async function getAuthHeaders(config: TerraPayConfig): Promise<Record<string, string>> {
+export async function getAuthHeaders(
+  config: TerraPayConfig,
+  isFormData: boolean,
+): Promise<Record<string, string>> {
   const isHashed = config.isPasswordHashed ?? true;
 
   const finalPassword = isHashed ? config.password : await sha256(config.password);
@@ -29,6 +32,6 @@ export async function getAuthHeaders(config: TerraPayConfig): Promise<Record<str
     'X-DATE': getUtcTimestamp(),
     'X-ORIGINCOUNTRY': config.originCountry,
     'User-Agent': 'terrapay-js/1.0.1',
-    'Content-Type': 'application/json',
+    ...(!isFormData && { 'Content-Type': 'application/json' }),
   };
 }
