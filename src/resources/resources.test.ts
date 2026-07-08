@@ -82,13 +82,33 @@ describe('Domain Resources API Methods', () => {
       accounttype: 'Savings',
     });
     const [url] = (global.fetch as any).mock.calls[0];
-    expect(url).toContain('/gsma/accounts/accountNumber/232201001617/status?');
+    expect(url).toContain('/gsma/accounts/232201001617/status?');
+    expect(url).not.toContain('/gsma/accounts/accountNumber/');
     expect(url).toContain('bnv=Devki%20Luggage%20Centre');
     expect(url).toContain('bankcode=CNRB0000232');
     expect(url).toContain('bankname=Canara%20Bank');
     expect(url).toContain('country=IN');
     expect(url).toContain('banksubcode=BR001');
     expect(url).toContain('accounttype=Savings');
+  });
+
+  it('getStatus: bank account without IFSC bankcode (US, banksubcode routing number)', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    await sdk.accounts.getStatus('accountNumber', '004881761276', {
+      bnv: 'CARLOS GUZMAN',
+      bankname: 'Bank of America',
+      banksubcode: '111000025',
+      country: 'US',
+    });
+    const [url] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain('/gsma/accounts/004881761276/status?');
+    expect(url).not.toContain('/gsma/accounts/accountNumber/');
+    expect(url).toContain('bnv=CARLOS%20GUZMAN');
+    expect(url).toContain('bankname=Bank%20of%20America');
+    expect(url).toContain('banksubcode=111000025');
+    expect(url).toContain('country=US');
+    expect(url).not.toContain('bankcode=');
   });
 
   it('Ancillary: getBanks', async () => {

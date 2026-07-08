@@ -1,6 +1,6 @@
 {
   "name": "terrapay-js",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A production-grade, type-safe SDK for the TerraPay API",
   "type": "module",
   "sideEffects": false,

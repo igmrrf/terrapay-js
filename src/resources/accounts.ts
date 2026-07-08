@@ -66,7 +66,12 @@ export class Accounts {
     params: AccountStatusParams,
     options?: RequestOptions,
   ): Promise<AccountStatusResponse> {
-    const path = `/gsma/accounts/${encodeURIComponent(identifierType)}/${encodeURIComponent(identifier)}/status`;
+    // Bank accounts use `/accounts/{accountId}/status` (no type segment); other
+    // identifier types (msisdn, walletId) are addressed via `/accounts/{type}/{id}/status`.
+    const path =
+      identifierType === 'accountNumber'
+        ? `/gsma/accounts/${encodeURIComponent(identifier)}/status`
+        : `/gsma/accounts/${encodeURIComponent(identifierType)}/${encodeURIComponent(identifier)}/status`;
     const finalPath = `${path}${buildQuery(params, ACCOUNT_STATUS_KEYS)}`;
 
     return this.client.request<AccountStatusResponse>('GET', finalPath, undefined, options);
