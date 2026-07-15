@@ -3,7 +3,7 @@
  * A production-grade, type-safe client for the TerraPay API.
  */
 
-export { TerraPay } from './terrapay.js';
+export { createTerraPayClients, TerraPay } from './terrapay.js';
 export { MockTerraPay } from './mock.js';
 export { getAuthHeaders, getUtcTimestamp } from './core/auth.js';
 // Export Core Utilities & Errors
@@ -16,5 +16,11 @@ export {
   ValidationError,
 } from './core/errors.js';
 export { getResponseMessage, RESPONSE_CODES, type ResponseCode } from './core/response-codes.js';
+export {
+  classifyRemitStatus,
+  normalizeRemitCode,
+  REMIT_PENDING_CODES,
+  REMIT_SUCCESS_CODES,
+} from './status.js';
 // Export Types
 export * from './types/index.js';

@@ -1,8 +1,19 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { generateKeyPairSync } from 'node:crypto';
 import { TerraPay } from '../terrapay.js';
-import { NAME_MATCH_STATUSES, SCHEMES } from '../types/index.js';
-import type { NameMatchStatus, TransactionRequest } from '../types/index.js';
+import {
+  NAME_MATCH_STATUSES,
+  SCHEMES,
+  describeProviderRequirement,
+  getBusinessSide,
+} from '../types/index.js';
+import type {
+  BusinessKyc,
+  NameMatchStatus,
+  RecipientKyc,
+  SenderKyc,
+  TransactionRequest,
+} from '../types/index.js';
 
 describe('Domain Resources API Methods', () => {
   const sdk = new TerraPay({
@@ -173,30 +184,81 @@ describe('Domain Resources API Methods', () => {
     expect(url).toContain('/gsmaV3/quotations/USD?instrumentType=CARD&transactionType=p2p');
   });
 
+  it('Quotations: getCorridorRates accepts a business TransactionType', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            requestDate: '2020-01-02 10:51:16',
+            requestCurrency: 'USD',
+            quotes: [],
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    await sdk.quotations.getCorridorRates('USD', 'BANK_AC', 'b2b');
+    const [url] = (global.fetch as any).mock.calls[0];
+    expect(url).toContain('transactionType=b2b');
+  });
+
+  it('Quotations: getCorridorRates rejects a non-TransactionType string at compile time', () => {
+    // @ts-expect-error 'b2c' is not a valid TransactionType
+    const call = () => sdk.quotations.getCorridorRates('USD', 'BANK_AC', 'b2c');
+    expect(typeof call).toBe('function');
+  });
+
   it('Quotations: getCorridorRates parses the corridor rate shape', async () => {
-    const body = [
-      {
-        requestDate: '2020-01-02 10:51:16',
-        requestCurrency: 'USD',
-        quotes: [
-          {
-            receivingCurrency: 'ILS',
-            fxRate: '3.590000',
-            transactionType: 'p2p',
-            instrumentType: 'BANK_AC',
-            scheme: '*',
-          },
-        ],
-        quotationStatus: '9000:Success',
-      },
-    ];
+    const body = {
+      requestDate: '2020-01-02 10:51:16',
+      requestCurrency: 'USD',
+      quotes: [
+        {
+          receivingCurrency: 'ILS',
+          fxRate: '3.590000',
+          transactionType: 'p2p',
+          instrumentType: 'BANK_AC',
+          scheme: '*',
+        },
+      ],
+      quotationStatus: '9000:Success',
+    };
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(body), { status: 200 })));
     const res = await sdk.quotations.getCorridorRates('USD', 'BANK_AC');
-    expect(res[0].requestCurrency).toBe('USD');
-    expect(res[0].quotes[0].receivingCurrency).toBe('ILS');
-    expect(res[0].quotes[0].fxRate).toBe('3.590000');
-    expect(res[0].quotationStatus).toBe('9000:Success');
+    expect(res.requestCurrency).toBe('USD');
+    expect(res.quotes[0].receivingCurrency).toBe('ILS');
+    expect(res.quotes[0].fxRate).toBe('3.590000');
+    expect(res.quotationStatus).toBe('9000:Success');
+  });
+
+  it('Quotations: getCorridorRatesV3 parses the corridor rate shape', async () => {
+    const body = {
+      requestDate: '2017-10-18 09:27:16',
+      requestCurrency: 'USD',
+      quotes: [
+        {
+          receivingCurrency: 'CNY',
+          fxRate: '7.8',
+          transactionType: 'p2p',
+          instrumentType: 'BANK_AC',
+          scheme: 'UP',
+          country: 'CN',
+          verticalTypes: '*',
+        },
+      ],
+      quotationStatus: '9000:Success',
+    };
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response(JSON.stringify(body), { status: 200 })));
+    const res = await sdk.quotations.getCorridorRatesV3('USD', 'BANK_AC');
+    expect(res.requestCurrency).toBe('USD');
+    expect(res.quotes[0].receivingCurrency).toBe('CNY');
+    expect(res.quotes[0].fxRate).toBe('7.8');
+    expect(res.quotes[0].country).toBe('CN');
+    expect(res.quotes[0].verticalTypes).toBe('*');
+    expect(res.quotationStatus).toBe('9000:Success');
   });
 
   it('Reports: getLedgerBalance', async () => {
@@ -208,6 +270,31 @@ describe('Domain Resources API Methods', () => {
     expect(init.method).toBe('GET');
   });
 
+  it('Reports: getLedgerBalance normalizes an empty-object response to []', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    const balances = await sdk.reports.getLedgerBalance();
+    expect(balances).toEqual([]);
+  });
+
+  it('Reports: getLedgerBalance passes through an array response unchanged', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify([
+            { currency: 'USD', currentBalance: '100.00', account: 'ACC1', status: 'ACTIVE' },
+          ]),
+          { status: 200 },
+        ),
+      ),
+    );
+    const balances = await sdk.reports.getLedgerBalance();
+    expect(balances).toEqual([
+      { currency: 'USD', currentBalance: '100.00', account: 'ACC1', status: 'ACTIVE' },
+    ]);
+  });
+
   it('Reports: getLedgerBalanceByCurrency', async () => {
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
@@ -215,6 +302,13 @@ describe('Domain Resources API Methods', () => {
     const [url, init] = (global.fetch as any).mock.calls[0];
     expect(url).toContain('/gsma/accounts/USD/balance_v1');
     expect(init.method).toBe('GET');
+  });
+
+  it('Reports: getLedgerBalanceByCurrency normalizes an empty-object response to []', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
+    const balances = await sdk.reports.getLedgerBalanceByCurrency('USD');
+    expect(balances).toEqual([]);
   });
 
   it('Reports: getStatements', async () => {
@@ -238,6 +332,57 @@ describe('Domain Resources API Methods', () => {
     expect(init.headers['X-Correlation-ID']).toBe('abc');
   });
 
+  it('Transactions: create derives status from transactionStatus when the API omits it', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            amount: '1000.00',
+            currency: 'USD',
+            type: 'p2p',
+            requestDate: '2026-07-08 15:55:32',
+            requestingOrganisationTransactionReference: 'TP-BANK-1',
+            transactionStatus: '3050:Remit Acknowledged.',
+            transactionReference: 'TPMU000001951126',
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const res = await sdk.transactions.create({} as any);
+    expect(res.status).toBe('PENDING');
+  });
+
+  it('Transactions: create keeps an API-provided status untouched', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({
+            transactionStatus: '3000:Remit Success',
+            transactionReference: 'TPMU000001951127',
+            status: 'CANCELLED',
+          }),
+          { status: 200 },
+        ),
+      ),
+    );
+    const res = await sdk.transactions.create({} as any);
+    expect(res.status).toBe('CANCELLED');
+  });
+
+  it('Transactions: getStatus derives status from transactionStatus', async () => {
+    // @ts-expect-error
+    global.fetch = mock(() =>
+      Promise.resolve(
+        new Response(JSON.stringify({ transactionStatus: '3000:Remit Success' }), { status: 200 }),
+      ),
+    );
+    const res = await sdk.transactions.getStatus('TP123');
+    expect(res.status).toBe('SUCCESS');
+  });
+
   it('Transactions: create serializes scheme and senderKyc.cityOfBirth', async () => {
     // @ts-expect-error
     global.fetch = mock(() => Promise.resolve(new Response('{}', { status: 200 })));
@@ -257,6 +402,9 @@ describe('Domain Resources API Methods', () => {
         subjectName: { firstName: 'Einstein', lastName: 'Bela', fullName: 'Einstein James Bela' },
         postalAddress: { addressLine1: '49', city: 'Lyon', country: 'FR' },
         idDocument: [{ idType: 'passport', idNumber: '123456789', expiryDate: '2033-09-26' }],
+      },
+      recipientKyc: {
+        subjectName: { firstName: 'John', lastName: 'Doe', fullName: 'John Doe' },
       },
     };
     await sdk.transactions.create(body);
@@ -315,6 +463,12 @@ describe('Domain Resources API Methods', () => {
     expect(NAME_MATCH_STATUSES.MTCH.definition).toContain('exact match');
   });
 
+  it('describeProviderRequirement: flags only the confirmed corridors', () => {
+    expect(describeProviderRequirement('CO')).toBe('mandatory');
+    expect(describeProviderRequirement('eg')).toBe('mandatory');
+    expect(describeProviderRequirement('US')).toBe('unknown');
+  });
+
   it('Accounts: getPanStatus encrypts the PAN into the X-PAN header', async () => {
     const panSdk = new TerraPay({
       username: 'test',
@@ -361,5 +515,130 @@ describe('Domain Resources API Methods', () => {
     expect(init.method).toBe('POST');
     expect(init.body).toBeInstanceOf(FormData);
     expect(init.headers['Content-Type']).toBeUndefined();
+  });
+
+  describe('TransactionRequest variants', () => {
+    const baseFields = {
+      amount: '100',
+      currency: 'USD',
+      requestDate: '2021-05-23 08:19:36',
+      requestingOrganisationTransactionReference: 'TxnRef001',
+      debitParty: [{ key: 'msisdn', value: '+10000000000' }],
+      creditParty: [{ key: 'msisdn', value: '+20000000000' }],
+    };
+
+    const personalSenderKyc: SenderKyc = {
+      nationality: 'US',
+      dateOfBirth: '1990-01-01',
+      subjectName: { firstName: 'Jane', lastName: 'Sender', fullName: 'Jane Sender' },
+      postalAddress: { addressLine1: '1 Main St', city: 'New York', country: 'US' },
+      idDocument: [{ idType: 'passport', idNumber: '123456789', expiryDate: '2033-01-01' }],
+    };
+
+    const personalRecipientKyc: RecipientKyc = {
+      subjectName: { firstName: 'John', lastName: 'Doe', fullName: 'John Doe' },
+    };
+
+    const businessKyc: BusinessKyc = { businessName: 'Acme Corp' };
+
+    it('p2p requires both senderKyc and recipientKyc', () => {
+      const valid: TransactionRequest = {
+        ...baseFields,
+        type: 'p2p',
+        senderKyc: personalSenderKyc,
+        recipientKyc: personalRecipientKyc,
+      };
+      expect(valid.type).toBe('p2p');
+
+      // @ts-expect-error senderKyc is required for p2p
+      const missingSender: TransactionRequest = {
+        ...baseFields,
+        type: 'p2p',
+        recipientKyc: personalRecipientKyc,
+      };
+      expect(missingSender.type).toBe('p2p');
+    });
+
+    it('b2b requires business.senderKyc and business.recepientKyc', () => {
+      const valid: TransactionRequest = {
+        ...baseFields,
+        type: 'b2b',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        business: { senderKyc: businessKyc, recepientKyc: businessKyc },
+      };
+      expect(valid.type).toBe('b2b');
+
+      const missingRecipient: TransactionRequest = {
+        ...baseFields,
+        type: 'b2b',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        // @ts-expect-error business.recepientKyc is required for b2b
+        business: { senderKyc: businessKyc },
+      };
+      expect(missingRecipient.type).toBe('b2b');
+    });
+
+    it('b2p requires business.senderKyc plus a personal recipientKyc', () => {
+      const valid: TransactionRequest = {
+        ...baseFields,
+        type: 'b2p',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        business: { senderKyc: businessKyc },
+        recipientKyc: personalRecipientKyc,
+      };
+      expect(valid.type).toBe('b2p');
+
+      // @ts-expect-error recipientKyc is required for b2p
+      const missingRecipient: TransactionRequest = {
+        ...baseFields,
+        type: 'b2p',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        business: { senderKyc: businessKyc },
+      };
+      expect(missingRecipient.type).toBe('b2p');
+    });
+
+    it('p2b requires a personal senderKyc plus business.recepientKyc', () => {
+      const valid: TransactionRequest = {
+        ...baseFields,
+        type: 'p2b',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        senderKyc: personalSenderKyc,
+        business: { recepientKyc: businessKyc },
+      };
+      expect(valid.type).toBe('p2b');
+
+      // @ts-expect-error senderKyc is required for p2b
+      const missingSender: TransactionRequest = {
+        ...baseFields,
+        type: 'p2b',
+        paymentMode: 'Account',
+        paymentOption: 'Account Credit',
+        business: { recepientKyc: businessKyc },
+      };
+      expect(missingSender.type).toBe('p2b');
+    });
+
+    it('business types require paymentMode and paymentOption', () => {
+      // @ts-expect-error paymentMode/paymentOption are required for b2b
+      const missingPayment: TransactionRequest = {
+        ...baseFields,
+        type: 'b2b',
+        business: { senderKyc: businessKyc, recepientKyc: businessKyc },
+      };
+      expect(missingPayment.type).toBe('b2b');
+    });
+
+    it('getBusinessSide maps each TransactionType to its business side', () => {
+      expect(getBusinessSide('p2p')).toBe('none');
+      expect(getBusinessSide('b2b')).toBe('both');
+      expect(getBusinessSide('b2p')).toBe('sender');
+      expect(getBusinessSide('p2b')).toBe('recipient');
+    });
   });
 });

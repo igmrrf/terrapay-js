@@ -1,9 +1,11 @@
 import type { BaseClient } from '../core/client.js';
 import type {
-  CorridorQuotationResponse,
+  CorridorQuotationResponseV2,
+  CorridorQuotationResponseV3,
   QuotationRequest,
   QuotationResponse,
   RequestOptions,
+  TransactionType,
 } from '../types/index.js';
 
 /**
@@ -46,11 +48,11 @@ export class Quotations {
   async getCorridorRates(
     prefundingCurrency: string,
     instrumentType?: string,
-    transactionType = 'p2p',
+    transactionType: TransactionType = 'p2p',
     options?: RequestOptions,
-  ): Promise<CorridorQuotationResponse[]> {
+  ): Promise<CorridorQuotationResponseV2> {
     const path = `/gsmaV2/quotations/${encodeURIComponent(prefundingCurrency)}${corridorQuery(instrumentType, transactionType)}`;
-    return this.client.request<CorridorQuotationResponse[]>('GET', path, undefined, options);
+    return this.client.request<CorridorQuotationResponseV2>('GET', path, undefined, options);
   }
 
   /**
@@ -64,11 +66,11 @@ export class Quotations {
   async getCorridorRatesV3(
     prefundingCurrency: string,
     instrumentType?: string,
-    transactionType = 'p2p',
+    transactionType: TransactionType = 'p2p',
     options?: RequestOptions,
-  ): Promise<CorridorQuotationResponse[]> {
+  ): Promise<CorridorQuotationResponseV3> {
     const path = `/gsmaV3/quotations/${encodeURIComponent(prefundingCurrency)}${corridorQuery(instrumentType, transactionType)}`;
-    return this.client.request<CorridorQuotationResponse[]>('GET', path, undefined, options);
+    return this.client.request<CorridorQuotationResponseV3>('GET', path, undefined, options);
   }
 }
 
@@ -76,7 +78,10 @@ export class Quotations {
  * Builds the corridor query string. `instrumentType` is optional (omitting it
  * returns rates for all instruments); `transactionType` is always sent.
  */
-function corridorQuery(instrumentType: string | undefined, transactionType: string): string {
+function corridorQuery(
+  instrumentType: string | undefined,
+  transactionType: TransactionType,
+): string {
   const parts: string[] = [];
   if (instrumentType) parts.push(`instrumentType=${encodeURIComponent(instrumentType)}`);
   parts.push(`transactionType=${encodeURIComponent(transactionType)}`);

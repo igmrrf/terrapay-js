@@ -89,5 +89,6 @@ export interface RequestOptions {
   headers?: Record<string, string>;
 }
 
-export * from './resources.js';
+export * from './resources/index.js';
 export * from './responses.js';
+export * from './webhooks.js';

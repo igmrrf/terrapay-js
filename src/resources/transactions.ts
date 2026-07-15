@@ -1,4 +1,5 @@
 import type { BaseClient } from '../core/client.js';
+import { classifyRemitStatus } from '../status.js';
 import type {
   CancelTransactionRequest,
   CancelTransactionResponse,
@@ -23,7 +24,16 @@ export class Transactions {
    * @returns A promise resolving to the created transaction response.
    */
   async create(data: TransactionRequest, options?: RequestOptions): Promise<TransactionResponse> {
-    return this.client.request<TransactionResponse>('POST', '/gsma/transactions', data, options);
+    const response = await this.client.request<TransactionResponse>(
+      'POST',
+      '/gsma/transactions',
+      data,
+      options,
+    );
+    return {
+      ...response,
+      status: response.status ?? classifyRemitStatus(response.transactionStatus),
+    };
   }
 
   /**
@@ -38,7 +48,16 @@ export class Transactions {
     options?: RequestOptions,
   ): Promise<TransactionResponse> {
     const path = `/gsma/transactions_v3/${encodeURIComponent(transactionReference)}`;
-    return this.client.request<TransactionResponse>('GET', path, undefined, options);
+    const response = await this.client.request<TransactionResponse>(
+      'GET',
+      path,
+      undefined,
+      options,
+    );
+    return {
+      ...response,
+      status: response.status ?? classifyRemitStatus(response.transactionStatus),
+    };
   }
 
   /**

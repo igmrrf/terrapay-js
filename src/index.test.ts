@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { AuthenticationError } from './core/errors.js';
-import { TerraPay } from './index.js';
+import { TerraPay, classifyRemitStatus, createTerraPayClients } from './index.js';
 
 describe('TerraPay SDK Integration (Mocked)', () => {
   const config = {
@@ -285,5 +285,33 @@ describe('TerraPay SDK Integration (Mocked)', () => {
 
     await expect(sdk.transactions.getStatus('ref123')).rejects.toThrow('fetch failed');
     expect(calls).toBe(2); // Initial attempt (0) + 1 retry = 2 calls
+  });
+});
+
+describe('createTerraPayClients', () => {
+  it('lazily builds one client per key and caches it', () => {
+    const clients = createTerraPayClients({
+      acme: { username: 'acme', password: 'pw', originCountry: 'US', environment: 'uat' as const },
+      globex: {
+        username: 'globex',
+        password: 'pw',
+        originCountry: 'GB',
+        environment: 'uat' as const,
+      },
+    });
+
+    const acme1 = clients.get('acme');
+    const acme2 = clients.get('acme');
+    const globex1 = clients.get('globex');
+
+    expect(acme1).toBeInstanceOf(TerraPay);
+    expect(acme1).toBe(acme2);
+    expect(acme1).not.toBe(globex1);
+  });
+});
+
+describe('status classification helpers', () => {
+  it('classifyRemitStatus is importable from the package root', () => {
+    expect(classifyRemitStatus('3000:Remit Success')).toBe('SUCCESS');
   });
 });

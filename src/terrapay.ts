@@ -69,3 +69,36 @@ export class TerraPay {
     this.reports = new Reports(this.client);
   }
 }
+
+/**
+ * Lazily builds and caches one {@link TerraPay} client per key — for
+ * integrators running multiple partner accounts (each with its own
+ * credentials) against the same integration. Per-call retry-variant
+ * selection (e.g. a no-retry client for create/cancel/reverse) stays
+ * application-specific: pass a different `maxRetries` per config entry and
+ * build that distinction yourself if you need it.
+ *
+ * @example
+ * ```typescript
+ * const clients = createTerraPayClients({
+ *   acme: { username: 'acme_user', password: '...', originCountry: 'US', environment: 'production' },
+ *   globex: { username: 'globex_user', password: '...', originCountry: 'GB', environment: 'production' },
+ * });
+ * const balance = await clients.get('acme').reports.getLedgerBalance();
+ * ```
+ */
+export function createTerraPayClients<K extends string>(
+  configs: Record<K, TerraPayConfig>,
+): { get(key: K): TerraPay } {
+  const cache = new Map<K, TerraPay>();
+  return {
+    get(key: K): TerraPay {
+      let client = cache.get(key);
+      if (!client) {
+        client = new TerraPay(configs[key]);
+        cache.set(key, client);
+      }
+      return client;
+    },
+  };
+}

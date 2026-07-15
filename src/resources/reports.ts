@@ -14,12 +14,13 @@ export class Reports {
    * @returns A promise resolving to the ledger balance report.
    */
   async getLedgerBalance(options?: RequestOptions): Promise<LedgerBalanceResponse> {
-    return this.client.request<LedgerBalanceResponse>(
+    const data = await this.client.request<LedgerBalanceResponse | Record<string, never>>(
       'GET',
       '/gsma/accounts/all/balance_v1',
       undefined,
       options,
     );
+    return Array.isArray(data) ? data : [];
   }
 
   /**
@@ -34,7 +35,13 @@ export class Reports {
     options?: RequestOptions,
   ): Promise<LedgerBalanceResponse> {
     const path = `/gsma/accounts/${encodeURIComponent(currency)}/balance_v1`;
-    return this.client.request<LedgerBalanceResponse>('GET', path, undefined, options);
+    const data = await this.client.request<LedgerBalanceResponse | Record<string, never>>(
+      'GET',
+      path,
+      undefined,
+      options,
+    );
+    return Array.isArray(data) ? data : [];
   }
 
   /**
