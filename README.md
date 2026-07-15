@@ -232,4 +232,6 @@ bun test
 bun run lint
 ```
 
+For live sandbox testing, see the [Integration Suite README](./integration/README.md).
+
 ---

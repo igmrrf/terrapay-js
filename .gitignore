@@ -32,3 +32,8 @@ coverage
 
 .cred.env
 .creds.env
+.env.test
+.env.test.local
+
+# Integration run artifacts (contain live sandbox responses)
+integration/results/

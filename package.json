@@ -1,6 +1,6 @@
 {
   "name": "terrapay-js",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "A production-grade, type-safe SDK for the TerraPay API",
   "type": "module",
   "sideEffects": false,
@@ -19,11 +19,13 @@
   ],
   "scripts": {
     "build": "bunx tsup",
-    "test": "bun test",
+    "test": "bun test src",
     "test:watch": "bun test --watch",
+    "test:integration": "TERRAPAY_INTEGRATION=1 bun test --timeout 60000 integration/sandbox.test.ts",
     "lint": "bunx @biomejs/biome check .",
     "lint:fix": "bunx @biomejs/biome check --write .",
     "typecheck": "bunx tsc --noEmit",
+    "typecheck:integration": "bunx tsc -p tsconfig.integration.json",
     "prepublishOnly": "bun run test && bun run build"
   },
   "keywords": [
@@ -47,6 +49,7 @@
     "@biomejs/biome": "^1.9.4",
     "@types/bun": "^1.3.14",
     "@types/node": "^22.10.1",
+    "socks-ssh": "^0.0.1",
     "tsup": "^8.3.5",
     "typescript": "^5.7.2"
   }
